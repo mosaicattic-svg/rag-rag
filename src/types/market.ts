@@ -2,6 +2,21 @@ export type AssetCategory = 'overview' | 'stocks' | 'crypto' | 'forex' | 'indice
 
 export type ChartType = 'candlestick' | 'area' | 'line' | 'heikin-ashi';
 export type TimeFrame = '1D' | '5D' | '1M' | '3M' | '6M' | '1Y' | '5Y' | 'ALL';
+export type LayoutMode = '1x1' | '2x1' | '2x2';
+
+export type DrawingTool = 'cursor' | 'trendline' | 'horizontal' | 'fibonacci' | 'measure' | 'eraser';
+
+export interface DrawingItem {
+  id: string;
+  type: DrawingTool;
+  startX: number;
+  startY: number;
+  endX?: number;
+  endY?: number;
+  priceStart: number;
+  priceEnd?: number;
+  color: string;
+}
 
 export interface Candle {
   time: number;
@@ -81,4 +96,43 @@ export interface TradePosition {
   pnl: number;
   pnlPercent: number;
   openTime: number;
+  stopLoss?: number;
+  takeProfit?: number;
+}
+
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+  total: number;
+  depthPercent: number;
+}
+
+export interface TimeAndSalesTrade {
+  id: string;
+  time: string;
+  price: number;
+  size: number;
+  side: 'buy' | 'sell';
+}
+
+export interface EconomicEvent {
+  id: string;
+  time: string;
+  currency: string;
+  event: string;
+  impact: 'High' | 'Medium' | 'Low';
+  actual?: string;
+  forecast?: string;
+  previous: string;
+}
+
+export interface BacktestReport {
+  strategyName: string;
+  netProfitPercent: number;
+  profitFactor: number;
+  winRatePercent: number;
+  maxDrawdownPercent: number;
+  totalTrades: number;
+  sharpeRatio: number;
+  equityCurve: number[];
 }

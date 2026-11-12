@@ -26,25 +26,20 @@ import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { SearchModal } from './components/SearchModal';
 import { PaperTradeModal } from './components/PaperTradeModal';
 import { AlertModal } from './components/AlertModal';
+import { TradingTerminalFooter } from './components/TradingTerminalFooter';
+import { playAudioFeedback } from './utils/chartHelpers';
 import { Bell, CheckCircle, X } from 'lucide-react';
 
 export default function App() {
-  // Theme state: default dark mode for authentic TradingView look
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('tv_theme') as 'dark' | 'light') || 'dark';
   });
 
-  // Active Category Screen
   const [currentCategory, setCurrentCategory] = useState<AssetCategory>('overview');
-
-  // Market Dataset with live simulated ticks
   const [items, setItems] = useState<MarketItem[]>(INITIAL_MARKET_DATA);
   const [selectedSymbol, setSelectedSymbol] = useState<string>('NVDA');
-
-  // Simulation running state
   const [isSimulating, setIsSimulating] = useState<boolean>(true);
 
-  // Watchlist stored in localStorage
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('tv_watchlist');
@@ -54,7 +49,6 @@ export default function App() {
     }
   });
 
-  // Alerts stored in localStorage
   const [alerts, setAlerts] = useState<AlertItem[]>(() => {
     try {
       const saved = localStorage.getItem('tv_alerts');
@@ -64,26 +58,33 @@ export default function App() {
     }
   });
 
-  // Paper Trading Positions stored in localStorage
   const [positions, setPositions] = useState<TradePosition[]>(() => {
     try {
       const saved = localStorage.getItem('tv_positions');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'pos-init-1',
+          symbol: 'NVDA',
+          side: 'buy',
+          qty: 25,
+          entryPrice: 144.20,
+          currentPrice: 147.80,
+          pnl: 90.0,
+          pnlPercent: 2.5,
+          openTime: Date.now() - 3600000,
+        },
+      ];
     } catch {
       return [];
     }
   });
 
-  // UI Drawer / Modal states
   const [isWatchlistOpen, setIsWatchlistOpen] = useState<boolean>(false);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [tradeModalItem, setTradeModalItem] = useState<{ item: MarketItem; side: 'buy' | 'sell' } | null>(null);
   const [alertModalItem, setAlertModalItem] = useState<MarketItem | null>(null);
-
-  // Active toast notification for triggered price alerts
   const [activeToast, setActiveToast] = useState<{ id: string; message: string } | null>(null);
 
-  // Sync theme with DOM root class
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -99,28 +100,24 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Sync watchlist to localStorage
   useEffect(() => {
     localStorage.setItem('tv_watchlist', JSON.stringify(watchlistSymbols));
   }, [watchlistSymbols]);
 
-  // Sync alerts to localStorage
   useEffect(() => {
     localStorage.setItem('tv_alerts', JSON.stringify(alerts));
   }, [alerts]);
 
-  // Sync positions to localStorage
   useEffect(() => {
     localStorage.setItem('tv_positions', JSON.stringify(positions));
   }, [positions]);
 
-  // Live price tick simulation loop
+  // Live simulation tick engine
   useEffect(() => {
     if (!isSimulating) return;
 
     const interval = setInterval(() => {
       setItems((prevItems) => {
-        // Pick 2-3 random instruments to nudge
         const numUpdates = Math.floor(Math.random() * 3) + 1;
         const updated = [...prevItems];
 
@@ -128,12 +125,10 @@ export default function App() {
           const randIdx = Math.floor(Math.random() * updated.length);
           const item = updated[randIdx];
 
-          // Small random delta (e.g. -0.25% to +0.25%)
           const pctDelta = (Math.random() - 0.49) * 0.005;
           const oldPrice = item.price;
           let newPrice = oldPrice * (1 + pctDelta);
 
-          // Forex decimal bounds
           if (item.category === 'forex') {
             newPrice = Number(newPrice.toFixed(4));
           } else if (item.price >= 100) {
@@ -146,23 +141,21 @@ export default function App() {
           const changePercent = (change / item.prevClose) * 100;
           const high = Math.max(item.high, newPrice);
           const low = Math.min(item.low, newPrice);
-
-          // Update sparkline
           const sparkline = [...item.sparkline.slice(1), newPrice];
 
-          // Check alerts for this symbol
+          // Check alerts
           alerts.forEach((al) => {
             if (al.symbol === item.symbol && !al.triggered) {
               const triggeredAbove = al.condition === 'above' && newPrice >= al.targetPrice;
               const triggeredBelow = al.condition === 'below' && newPrice <= al.targetPrice;
               if (triggeredAbove || triggeredBelow) {
+                playAudioFeedback('alert');
                 setActiveToast({
                   id: al.id,
-                  message: `Alert triggered: ${item.symbol} crossed ${al.condition} $${al.targetPrice} (now $${newPrice})`,
+                  message: `Price Alert: ${item.symbol} crossed ${al.condition} $${al.targetPrice} (Price: $${newPrice})`,
                 });
-                // mark triggered
-                setAlerts((curAlerts) =>
-                  curAlerts.map((a) => (a.id === al.id ? { ...a, triggered: true } : a))
+                setAlerts((cur) =>
+                  cur.map((a) => (a.id === al.id ? { ...a, triggered: true } : a))
                 );
               }
             }
@@ -187,10 +180,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isSimulating, alerts]);
 
-  // Currently selected item
   const selectedItem = items.find((i) => i.symbol === selectedSymbol) || items[0];
 
-  // Watchlist handlers
   const handleToggleWatchlist = (symbol: string) => {
     setWatchlistSymbols((prev) =>
       prev.includes(symbol) ? prev.filter((s) => s !== symbol) : [...prev, symbol]
@@ -201,10 +192,10 @@ export default function App() {
     setWatchlistSymbols((prev) => prev.filter((s) => s !== symbol));
   };
 
-  // Trade Execution
   const handleExecuteTrade = (
     posData: Omit<TradePosition, 'id' | 'openTime' | 'pnl' | 'pnlPercent'>
   ) => {
+    playAudioFeedback('fill');
     const newPos: TradePosition = {
       ...posData,
       id: `pos-${Date.now()}`,
@@ -216,17 +207,34 @@ export default function App() {
   };
 
   const handleClosePosition = (id: string) => {
+    playAudioFeedback('click');
     setPositions((prev) => prev.filter((p) => p.id !== id));
   };
 
-  // Add Alert
   const handleAddAlert = (newAlert: AlertItem) => {
+    playAudioFeedback('click');
     setAlerts((prev) => [newAlert, ...prev]);
   };
 
   const handleRemoveAlert = (id: string) => {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
+
+  // Keyboard shortcut: Spacebar to cycle to next asset in watchlist
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === 'Space' && !isSearchOpen && !tradeModalItem && !alertModalItem) {
+        e.preventDefault();
+        const currentIdx = watchlistSymbols.indexOf(selectedSymbol);
+        const nextIdx = (currentIdx + 1) % watchlistSymbols.length;
+        setSelectedSymbol(watchlistSymbols[nextIdx]);
+        playAudioFeedback('click');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSymbol, watchlistSymbols, isSearchOpen, tradeModalItem, alertModalItem]);
 
   return (
     <div className="min-h-screen flex flex-col font-sans transition-colors">
@@ -236,7 +244,6 @@ export default function App() {
         selectedSymbol={selectedSymbol}
         onSelectSymbol={(sym) => {
           setSelectedSymbol(sym);
-          // if not on overview or stocks, set to overview
           if (currentCategory === 'news' || currentCategory === 'heatmap') {
             setCurrentCategory('overview');
           }
@@ -256,10 +263,10 @@ export default function App() {
         onToggleSimulation={() => setIsSimulating((prev) => !prev)}
       />
 
-      {/* Toast Notification Banner */}
+      {/* Toast Alert Notification Banner */}
       {activeToast && (
-        <div className="fixed top-16 right-4 z-50 flex items-center gap-3 px-4 py-3 bg-amber-500 text-slate-950 font-semibold text-xs rounded-xl shadow-xl animate-in slide-in-from-top-2">
-          <Bell className="w-4 h-4 shrink-0" />
+        <div className="fixed top-16 right-4 z-50 flex items-center gap-3 px-4 py-3 bg-[#089981] text-white font-semibold text-xs rounded-xl shadow-xl animate-in slide-in-from-top-2">
+          <Bell className="w-4 h-4 shrink-0 animate-bounce" />
           <span>{activeToast.message}</span>
           <button
             onClick={() => setActiveToast(null)}
@@ -271,7 +278,7 @@ export default function App() {
       )}
 
       {/* 3. Main Workspace Viewport */}
-      <main className="flex-1 max-w-[1720px] w-full mx-auto p-4 sm:p-6">
+      <main className="flex-1 max-w-[1720px] w-full mx-auto p-4 sm:p-6 pb-2">
         {currentCategory === 'overview' && (
           <MarketOverview
             items={items}
@@ -363,24 +370,34 @@ export default function App() {
         )}
       </main>
 
-      {/* 4. Footer */}
-      <footer className="border-t border-slate-200 dark:border-[#2a2e39] bg-white dark:bg-[#131722] py-6 px-4 sm:px-6 text-xs text-slate-500 dark:text-slate-400 mt-12 transition-colors">
+      {/* 4. Professional Trading Terminal Bottom Dock */}
+      <div className="max-w-[1720px] w-full mx-auto px-4 sm:px-6 mb-4">
+        <TradingTerminalFooter
+          positions={positions}
+          onClosePosition={handleClosePosition}
+          items={items}
+          selectedItem={selectedItem}
+        />
+      </div>
+
+      {/* 5. Footer */}
+      <footer className="border-t border-slate-200 dark:border-[#2a2e39] bg-white dark:bg-[#131722] py-4 px-4 sm:px-6 text-xs text-slate-500 dark:text-slate-400 transition-colors">
         <div className="max-w-[1720px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-slate-900 dark:text-white">TradingView Markets</span>
+            <span className="font-extrabold text-slate-900 dark:text-white">TradingView Pro Terminal</span>
             <span>·</span>
-            <span>Real-time global quotes, market breadth & charting intelligence</span>
+            <span>Real-time L2 order depth, multi-chart layout & algorithmic strategy engine</span>
           </div>
 
-          <div className="flex items-center gap-4 text-[11px]">
-            <span>Quotes simulated with realistic Brownian drift</span>
+          <div className="flex items-center gap-3 text-[11px] font-mono">
+            <span>Press <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-[#202533] text-slate-700 dark:text-slate-300">Space</kbd> to cycle watchlist</span>
             <span>·</span>
-            <span>Paper Trading Active</span>
+            <span><kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-[#202533] text-slate-700 dark:text-slate-300">Ctrl+K</kbd> Search</span>
           </div>
         </div>
       </footer>
 
-      {/* 5. Watchlist Slide-over Drawer */}
+      {/* 6. Watchlist Slide-over Drawer */}
       <WatchlistDrawer
         isOpen={isWatchlistOpen}
         onClose={() => setIsWatchlistOpen(false)}
@@ -398,7 +415,7 @@ export default function App() {
         }}
       />
 
-      {/* 6. Symbol Search Modal */}
+      {/* 7. Symbol Search Modal */}
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
@@ -408,7 +425,7 @@ export default function App() {
         onToggleWatchlist={handleToggleWatchlist}
       />
 
-      {/* 7. Paper Trade Modal */}
+      {/* 8. Paper Trade Modal */}
       {tradeModalItem && (
         <PaperTradeModal
           isOpen={Boolean(tradeModalItem)}
@@ -419,7 +436,7 @@ export default function App() {
         />
       )}
 
-      {/* 8. Price Alert Modal */}
+      {/* 9. Price Alert Modal */}
       {alertModalItem && (
         <AlertModal
           isOpen={Boolean(alertModalItem)}

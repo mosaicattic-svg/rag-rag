@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { MarketItem, SectorPerformance, NewsItem } from '../types/market';
+import { MarketItem, SectorPerformance, NewsItem, LayoutMode } from '../types/market';
 import { InteractiveChart } from './InteractiveChart';
 import { TechnicalGauge } from './TechnicalGauge';
+import { OrderBookDOM } from './OrderBookDOM';
 import { formatPercent, formatPrice } from '../utils/chartHelpers';
 import {
   TrendingUp,
   TrendingDown,
-  ArrowUpRight,
-  Clock,
-  Compass,
-  Zap,
   ChevronRight,
+  Layers,
+  LayoutGrid,
 } from 'lucide-react';
 
 interface MarketOverviewProps {
@@ -37,12 +36,18 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
   onSelectCategory,
 }) => {
   const [moverTab, setMoverTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('1x1');
 
   // Key hero benchmark cards
   const benchmarkSymbols = ['SPX', 'NDX', 'BTCUSDT', 'XAUUSD', 'USOIL'];
   const benchmarkItems = benchmarkSymbols
     .map((sym) => items.find((i) => i.symbol === sym))
     .filter(Boolean) as MarketItem[];
+
+  // Secondary items for 2x1 and 2x2 split views
+  const item2 = items.find((i) => i.symbol === 'BTCUSDT') || items[1];
+  const item3 = items.find((i) => i.symbol === 'SPX') || items[2];
+  const item4 = items.find((i) => i.symbol === 'AAPL') || items[3];
 
   // Sorted movers
   const gainers = [...items].sort((a, b) => b.changePercent - a.changePercent).slice(0, 5);
@@ -57,15 +62,15 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-[#2a2e39]">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Markets Overview
+            Markets Pro Terminal
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Real-time quotes, technical health indicators, and macro sector movements
+            Institutional charting, Level-2 order book depth, and macroeconomic breadth
           </p>
         </div>
 
         {/* Global Market Session Statuses */}
-        <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500/10 text-[#089981] border border-emerald-500/20 font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-[#089981] animate-pulse" />
             <span>US Markets Open</span>
@@ -121,72 +126,121 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
         })}
       </div>
 
-      {/* Main Grid: Interactive Chart + Technical Analysis Gauge */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 space-y-4">
-          <InteractiveChart
-            item={selectedItem}
-            theme={theme}
-            onQuickTrade={onQuickTrade}
-            onSetAlert={onSetAlert}
-          />
-        </div>
+      {/* CHART VIEWPORTS: SINGLE, 2X1 SPLIT, OR 2X2 QUAD VIEW */}
+      {layoutMode === '1x1' && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2 space-y-4">
+            <InteractiveChart
+              item={selectedItem}
+              theme={theme}
+              onQuickTrade={onQuickTrade}
+              onSetAlert={onSetAlert}
+              layoutMode={layoutMode}
+              onChangeLayout={setLayoutMode}
+            />
+          </div>
 
-        <div className="space-y-6">
-          <TechnicalGauge item={selectedItem} />
+          <div className="space-y-6">
+            {/* L2 Order Book Depth */}
+            <OrderBookDOM item={selectedItem} onQuickTrade={onQuickTrade} />
 
-          {/* Quick Stats of the Active Asset */}
-          <div className="bg-white dark:bg-[#131722] border border-slate-200 dark:border-[#2a2e39] rounded-xl p-5 shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white pb-2 border-b border-slate-200 dark:border-[#2a2e39]">
-              {selectedItem.symbol} Key Statistics
-            </h3>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Previous Close</span>
-                <div className="font-semibold font-mono text-slate-800 dark:text-slate-200">
-                  {formatPrice(selectedItem.prevClose, selectedItem.category)}
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Day Open</span>
-                <div className="font-semibold font-mono text-slate-800 dark:text-slate-200">
-                  {formatPrice(selectedItem.open, selectedItem.category)}
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Day High</span>
-                <div className="font-semibold font-mono text-[#089981]">
-                  {formatPrice(selectedItem.high, selectedItem.category)}
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Day Low</span>
-                <div className="font-semibold font-mono text-[#f23645]">
-                  {formatPrice(selectedItem.low, selectedItem.category)}
-                </div>
-              </div>
-              {selectedItem.peRatio && (
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400">P/E Ratio</span>
-                  <div className="font-semibold font-mono text-slate-800 dark:text-slate-200">
-                    {selectedItem.peRatio}
-                  </div>
-                </div>
-              )}
-              {selectedItem.marketCap && (
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400">Market Cap</span>
-                  <div className="font-semibold font-mono text-slate-800 dark:text-slate-200">
-                    ${selectedItem.marketCap}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* TradingView Speedometer Gauge */}
+            <TechnicalGauge item={selectedItem} />
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Market Movers & Sector Heatmap Strip */}
+      {layoutMode === '2x1' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Dual Chart Split (Synchronized Ticks)
+            </span>
+            <button
+              onClick={() => setLayoutMode('1x1')}
+              className="text-xs text-[#2962ff] font-semibold hover:underline"
+            >
+              Reset to 1x1
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <InteractiveChart
+              item={selectedItem}
+              theme={theme}
+              onQuickTrade={onQuickTrade}
+              onSetAlert={onSetAlert}
+              layoutMode={layoutMode}
+              onChangeLayout={setLayoutMode}
+              isCompact
+            />
+            <InteractiveChart
+              item={item2}
+              theme={theme}
+              onQuickTrade={onQuickTrade}
+              onSetAlert={onSetAlert}
+              layoutMode={layoutMode}
+              onChangeLayout={setLayoutMode}
+              isCompact
+            />
+          </div>
+        </div>
+      )}
+
+      {layoutMode === '2x2' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Quad 4-Chart Grid (Multi-Asset Real-Time Streaming)
+            </span>
+            <button
+              onClick={() => setLayoutMode('1x1')}
+              className="text-xs text-[#2962ff] font-semibold hover:underline"
+            >
+              Reset to 1x1
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <InteractiveChart
+              item={selectedItem}
+              theme={theme}
+              onQuickTrade={onQuickTrade}
+              onSetAlert={onSetAlert}
+              layoutMode={layoutMode}
+              onChangeLayout={setLayoutMode}
+              isCompact
+            />
+            <InteractiveChart
+              item={item2}
+              theme={theme}
+              onQuickTrade={onQuickTrade}
+              onSetAlert={onSetAlert}
+              layoutMode={layoutMode}
+              onChangeLayout={setLayoutMode}
+              isCompact
+            />
+            <InteractiveChart
+              item={item3}
+              theme={theme}
+              onQuickTrade={onQuickTrade}
+              onSetAlert={onSetAlert}
+              layoutMode={layoutMode}
+              onChangeLayout={setLayoutMode}
+              isCompact
+            />
+            <InteractiveChart
+              item={item4}
+              theme={theme}
+              onQuickTrade={onQuickTrade}
+              onSetAlert={onSetAlert}
+              layoutMode={layoutMode}
+              onChangeLayout={setLayoutMode}
+              isCompact
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Market Movers & Sector Breadth */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
         {/* Movers Card */}
         <div className="bg-white dark:bg-[#131722] border border-slate-200 dark:border-[#2a2e39] rounded-xl p-5 shadow-sm">
@@ -194,7 +248,6 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
               Market Movers
             </h3>
-            {/* Filter buttons */}
             <div className="flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-[#1e222d] rounded-lg text-xs">
               <button
                 onClick={() => setMoverTab('gainers')}
@@ -264,7 +317,7 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
           </div>
         </div>
 
-        {/* S&P 500 Sector Performance */}
+        {/* Sector Heatmap Strip */}
         <div className="bg-white dark:bg-[#131722] border border-slate-200 dark:border-[#2a2e39] rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-[#2a2e39]">
             <div>
@@ -298,7 +351,6 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
                       {formatPercent(sec.changePercent)}
                     </span>
                   </div>
-                  {/* Visual performance bar */}
                   <div className="h-1.5 w-full bg-slate-100 dark:bg-[#1e222d] rounded-full overflow-hidden flex">
                     <div
                       className={`h-full rounded-full ${
